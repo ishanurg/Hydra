@@ -1,82 +1,91 @@
-import time
-import random
-import curses
-from datetime import datetime
+import os
+from flask import Flask, render_template, request, redirect, url_for, send_from_directory, jsonify
+import werkzeug
+import socket
+import psutil
 
-def generate_data():
+app = Flask(__name__)
+
+# Configure upload folder
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'xls', 'xlsx'}
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 * 1024  # 16MB max file size
+
+# Ensure upload directory exists
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/anomaly')
+def anomaly():
+    return render_template('anomaly.html')
+
+@app.route('/nas')
+def nas():
+    files = os.listdir(app.config['UPLOAD_FOLDER'])
+    return render_template('nas.html', files=files)
+
+@app.route('/sniffer')
+def sniffer():
+    return render_template('sniffer.html')
+
+@app.route('/traffic_filter')
+def traffic_filter():
+    return render_template('traffic_filter.html')
+
+
+
+
+# File Upload Route
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    if 'file' not in request.files:
+        return redirect(url_for('nas', error='No file part'))
     
-    data = {
-        "Packet Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "Source IP": f"192.168.1.{random.randint(1, 254)}",
-        "Destination IP": f"192.168.1.{random.randint(1, 254)}",
-        "Source Port": random.randint(1000, 9999),
-        "Destination Port": random.randint(1000, 9999),
-        "Protocol Type": random.choice(['TCP', 'UDP', 'ICMP', 'HTTP', 'HTTPS']),
-        "Packet Length": random.randint(40, 1500),
-        "TCP Flags": random.choice(['SYN', 'ACK', 'FIN', 'RST', 'PSH']),
-        "Sequence Number (TCP)": random.randint(1000, 999999),
-        "Acknowledgment Number (TCP)": random.randint(1000, 999999),
-        "Network Interface (NIC)": "wlan1",  # Fixed value
-        "Payload (Data)": f"Data {random.randint(1, 1000)}",
-        "TTL": random.randint(1, 64),
-        "ICMP Type and Code": f"Type {random.randint(0, 255)}, Code {random.randint(0, 255)}",
-        "Error and Drop Information": random.choice(['No Errors', 'Packet Drop', 'Error']),
-        "Network Traffic Volume": f"{random.randint(10, 5000)} Bps",
-        "Session/Flow Data": f"Flow {random.randint(1, 10)}",
-        "DNS Queries and Responses": random.choice(['Resolved', 'Unresolved']),
-        "Bandwidth Utilization": f"{random.randint(1, 100)}%",
-        "Encryption": random.choice(['Encrypted', 'Not Encrypted']),
-        "Geolocation Data": f"Lat: {random.uniform(-90, 90):.2f}, Lon: {random.uniform(-180, 180):.2f}",
-        "HTTP Request Headers": f"GET /page{random.randint(1, 10)} HTTP/1.1",
-        "Authentication Information": f"User {random.choice(['admin', 'guest', 'user'])}",
-    }
-    return data
-
-def display_network_stats(stdscr):
-    # Clear screen
-    stdscr.clear()
+    file = request.files['file']
     
-    # Set up the display window
-    curses.curs_set(0)  # Hide cursor
-    stdscr.nodelay(1)  # Non-blocking input
-    stdscr.timeout(1000)  # Refresh every second
-
-    # Title and border setup
-    stdscr.addstr(0, 0, "==== Network Packet Capture - Stats ====", curses.A_BOLD)
-    stdscr.addstr(1, 0, "=" * 50, curses.A_BOLD)
-    stdscr.addstr(3, 0, "Press 'q' to Quit", curses.A_BOLD)
-
-    while True:
-        data = generate_data()
-        
-        # Clear screen before drawing new data
-        stdscr.clear()
-        stdscr.addstr(0, 0, "==== Network Packet Capture - Stats ====", curses.A_BOLD)
-        stdscr.addstr(1, 0, "=" * 50, curses.A_BOLD)
-        stdscr.addstr(3, 0, "Press 'q' to Quit", curses.A_BOLD)
-        stdscr.addstr(4, 0, "-" * 50, curses.A_BOLD)
-
-        
-        row = 5
-        for key, value in data.items():
-            stdscr.addstr(row, 0, f"{key}:")
-            stdscr.addstr(row, len(key) + 2, f"{value}")
-            row += 1
-        
-        # Refresh the screen to show the updated stats
-        stdscr.refresh()
-
-        # Check for quit key
-        key = stdscr.getch()
-        if key == ord('q'):  # Press 'q' to quit
-            break
-
-        # Simulate continuous stats every 1 second
-        time.sleep(1)
-
-def main():
+    if file.filename == '':
+        return redirect(url_for('nas', error='No selected file'))
     
-    curses.wrapper(display_network_stats)
+    if file and allowed_file(file.filename):
+        try:
+            filename = werkzeug.utils.secure_filename(file.filename)
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            return redirect(url_for('nas', message='File uploaded successfully'))
+        except Exception as e:
+            return redirect(url_for('nas', error=str(e)))
+    
+    return redirect(url_for('nas', error='File type not allowed'))
 
-if __name__ == "__main__":
-    main()
+# File Delete Route
+@app.route('/delete/<filename>')
+def delete_file(filename):
+    try:
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            return redirect(url_for('nas', message='File deleted successfully'))
+        else:
+            return redirect(url_for('nas', error='File not found'))
+    except Exception as e:
+        return redirect(url_for('nas', error=str(e)))
+
+# File Download Route
+@app.route('/download/<filename>')
+def download_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+@app.route('/network_dashboard')
+def network_dashboard():
+    return render_template('network_dashboard.html')
+#def network_dashboard():
+ #   return redirect("http://localhost:3000/lua/login.lua")
+if __name__ == '__main__':
+    app.run(debug=True)
