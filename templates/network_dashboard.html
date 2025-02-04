@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <div class="dashboard-container">
+        <h2>Network Dashboard</h2>
+        <button onclick="openInNewTab()">Click to open Network Dashboard</button>
+    </div>
+
+    <script type="text/javascript">
+        function openInNewTab() {
+            window.open("http://localhost:3000", "_blank");  // Open in new tab
+        }
+    </script>
+
+    <style>
+        /* Centering content and improving button styling */
+        .dashboard-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh; /* Full height of the viewport */
+            text-align: center;
+        }
+
+        h2 {
+            font-size: 2rem;
+            margin-bottom: 20px;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 1.1rem;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+{% endblock %}
+
